@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, Volume2, Download, Share2, RefreshCw, ArrowLeft, BookOpen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,33 +19,57 @@ interface StoryDisplayProps {
 const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis, onStartOver }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(45);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState([80]);
   const [showShareModal, setShowShareModal] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [audioGenerated, setAudioGenerated] = useState(false);
   const { toast } = useToast();
 
+  // Remove automatic audio generation
   useEffect(() => {
-    // Generate audio when component mounts
-    generateAudioForStory();
-  }, [story]);
+    return () => {
+      // Cleanup audio when component unmounts
+      if (audio) {
+        audio.pause();
+        audio.src = '';
+      }
+    };
+  }, [audio]);
 
   useEffect(() => {
-    if (audioUrl) {
+    if (audioUrl && !audio) {
       const audioElement = new Audio(audioUrl);
+      
       audioElement.addEventListener('loadedmetadata', () => {
-        setDuration(audioElement.duration || 45);
+        setDuration(audioElement.duration || 0);
+        console.log('Audio loaded, duration:', audioElement.duration);
       });
+      
       audioElement.addEventListener('timeupdate', () => {
         setCurrentTime(audioElement.currentTime);
       });
+      
       audioElement.addEventListener('ended', () => {
         setIsPlaying(false);
         setCurrentTime(0);
+        audioElement.currentTime = 0;
       });
+      
+      audioElement.addEventListener('loadstart', () => {
+        console.log('Audio loading started');
+      });
+      
+      audioElement.addEventListener('canplay', () => {
+        console.log('Audio can start playing');
+      });
+      
+      // Set initial volume
+      audioElement.volume = volume[0] / 100;
+      
       setAudio(audioElement);
       
       return () => {
@@ -54,18 +77,27 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis
         audioElement.src = '';
       };
     }
-  }, [audioUrl]);
+  }, [audioUrl, volume]);
 
   const generateAudioForStory = async () => {
+    if (audioGenerated || isGeneratingAudio) return;
+    
     setIsGeneratingAudio(true);
     try {
+      console.log('Generating audio for story...');
       const url = await generateAudio(story, {
         voice: 'aria',
         speed: 0.9,
         pitch: 1.0
       });
       setAudioUrl(url);
+      setAudioGenerated(true);
       console.log('Audio generated successfully:', url);
+      
+      toast({
+        title: "Audio ready!",
+        description: "Your story narration is ready to play.",
+      });
     } catch (error) {
       console.error('Failed to generate audio:', error);
       toast({
@@ -78,21 +110,40 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis
     }
   };
 
-  const togglePlayback = () => {
+  const togglePlayback = async () => {
+    // Generate audio on first play if not already generated
+    if (!audioGenerated && !isGeneratingAudio) {
+      await generateAudioForStory();
+      return; // Audio will be ready for next click
+    }
+    
     if (!audio || isGeneratingAudio) return;
     
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
+    try {
+      if (isPlaying) {
+        audio.pause();
+        console.log('Audio paused at:', audio.currentTime);
+      } else {
+        console.log('Starting audio playback from:', audio.currentTime);
+        await audio.play();
+      }
+      setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error('Error controlling audio playback:', error);
+      toast({
+        title: "Playback error",
+        description: "Unable to control audio playback.",
+        variant: "destructive"
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (value: number[]) => {
-    if (audio) {
-      audio.currentTime = value[0];
-      setCurrentTime(value[0]);
+    if (audio && audioGenerated) {
+      const newTime = value[0];
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+      console.log('Seeked to:', newTime);
     }
   };
 
@@ -251,6 +302,9 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis
               {isGeneratingAudio && (
                 <span className="text-sm text-gray-500">(Generating...)</span>
               )}
+              {!audioGenerated && !isGeneratingAudio && (
+                <span className="text-sm text-gray-500">(Click play to generate)</span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -259,11 +313,11 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis
               <div className="space-y-2">
                 <Slider
                   value={[currentTime]}
-                  max={duration}
+                  max={duration || 100}
                   step={1}
                   className="w-full"
                   onValueChange={handleSeek}
-                  disabled={!audioUrl || isGeneratingAudio}
+                  disabled={!audioGenerated || isGeneratingAudio}
                 />
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>{formatTime(currentTime)}</span>
@@ -276,7 +330,7 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ image, story, imageAnalysis
                 <div className="flex items-center space-x-4">
                   <Button
                     onClick={togglePlayback}
-                    disabled={!audioUrl || isGeneratingAudio}
+                    disabled={isGeneratingAudio}
                     className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-full w-12 h-12 p-0"
                   >
                     {isGeneratingAudio ? (
