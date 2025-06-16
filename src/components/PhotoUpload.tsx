@@ -4,6 +4,7 @@ import { Upload, X, ArrowLeft, Sparkles, Camera, Image as ImageIcon } from 'luci
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { analyzeImage } from '@/utils/imageAnalysis';
 
 interface PhotoUploadProps {
   onImageUpload: (imageUrl: string) => void;
@@ -19,6 +20,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
   onBack
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -42,7 +44,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
   };
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast({
         title: "Invalid file type",
@@ -61,14 +63,36 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
       return;
     }
 
+    setIsAnalyzing(true);
+    
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       if (e.target?.result) {
-        onImageUpload(e.target.result as string);
-        toast({
-          title: "Image uploaded successfully!",
-          description: "Your photo is ready for story generation.",
-        });
+        const imageUrl = e.target.result as string;
+        
+        try {
+          // Analyze the image
+          console.log('Starting image analysis...');
+          const analysis = await analyzeImage(imageUrl);
+          console.log('Image analysis complete:', analysis);
+          
+          onImageUpload(imageUrl);
+          
+          toast({
+            title: "Image uploaded and analyzed!",
+            description: `Detected: ${analysis.description}`,
+          });
+        } catch (error) {
+          console.error('Error analyzing image:', error);
+          onImageUpload(imageUrl); // Still upload even if analysis fails
+          
+          toast({
+            title: "Image uploaded successfully!",
+            description: "Your photo is ready for story generation.",
+          });
+        } finally {
+          setIsAnalyzing(false);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -119,19 +143,26 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
               >
                 <div className="mb-6">
                   <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4">
-                    <Upload className="h-12 w-12 text-purple-600" />
+                    {isAnalyzing ? (
+                      <Sparkles className="h-12 w-12 text-purple-600 animate-spin" />
+                    ) : (
+                      <Upload className="h-12 w-12 text-purple-600" />
+                    )}
                   </div>
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                    Drop your image here, or click to browse
+                    {isAnalyzing ? 'Analyzing your image...' : 'Drop your image here, or click to browse'}
                   </h3>
                   <p className="text-gray-500 mb-4">
                     Supports JPG, PNG, WEBP up to 10MB
                   </p>
                 </div>
 
-                <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white">
+                <Button 
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                  disabled={isAnalyzing}
+                >
                   <Camera className="h-4 w-4 mr-2" />
-                  Choose Photo
+                  {isAnalyzing ? 'Processing...' : 'Choose Photo'}
                 </Button>
 
                 <input
@@ -140,6 +171,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
                   accept="image/*"
                   onChange={handleFileInputChange}
                   className="hidden"
+                  disabled={isAnalyzing}
                 />
               </div>
             </CardContent>
@@ -167,7 +199,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 <div className="p-4">
                   <div className="flex items-center text-sm text-gray-600">
                     <ImageIcon className="h-4 w-4 mr-2" />
-                    Image ready for processing
+                    Image analyzed and ready for processing
                   </div>
                 </div>
               </CardContent>
@@ -184,7 +216,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
                     Ready to Create Magic?
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Our AI will analyze your photo and craft a unique story that captures its essence and emotion.
+                    Our AI has analyzed your photo and is ready to craft a unique story that captures its essence and emotion.
                   </p>
                   
                   <div className="space-y-4">

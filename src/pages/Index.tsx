@@ -7,25 +7,78 @@ import Header from '@/components/Header';
 import PhotoUpload from '@/components/PhotoUpload';
 import StoryDisplay from '@/components/StoryDisplay';
 import ProcessingState from '@/components/ProcessingState';
+import { analyzeImage, ImageAnalysisResult } from '@/utils/imageAnalysis';
+import { generateStory } from '@/utils/storyGeneration';
+import { generateAudio } from '@/utils/audioGeneration';
 
 const Index = () => {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedStory, setGeneratedStory] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysisResult | null>(null);
 
-  const handleImageUpload = (imageUrl: string) => {
+  const handleImageUpload = async (imageUrl: string) => {
     setUploadedImage(imageUrl);
     setShowUpload(false);
+    
+    if (imageUrl) {
+      try {
+        console.log('Analyzing uploaded image...');
+        const analysis = await analyzeImage(imageUrl);
+        setImageAnalysis(analysis);
+        console.log('Image analysis stored:', analysis);
+      } catch (error) {
+        console.error('Failed to analyze image:', error);
+      }
+    }
   };
 
   const handleGenerateStory = async () => {
+    if (!uploadedImage) return;
+    
     setIsGenerating(true);
-    // Simulate story generation
-    setTimeout(() => {
-      setGeneratedStory("In the golden hour of a perfect afternoon, Sarah discovered that sometimes the most beautiful moments are the ones we stumble upon by accident. The gentle breeze carried whispers of adventure, and she realized that this single photograph would forever capture not just a moment in time, but the feeling of infinite possibility that comes with embracing the unexpected.");
+    
+    try {
+      let analysis = imageAnalysis;
+      
+      // If we don't have analysis, analyze the image now
+      if (!analysis) {
+        console.log('No existing analysis, analyzing image...');
+        analysis = await analyzeImage(uploadedImage);
+        setImageAnalysis(analysis);
+      }
+      
+      console.log('Generating story with analysis:', analysis);
+      
+      // Generate story based on image analysis
+      const story = await generateStory(analysis, {
+        type: 'story',
+        tone: analysis.mood === 'cheerful' ? 'cheerful' : 
+              analysis.mood === 'mysterious' ? 'mysterious' :
+              analysis.mood === 'peaceful' ? 'contemplative' : 'contemplative',
+        length: 'medium'
+      });
+      
+      console.log('Generated story:', story);
+      
+      // Generate audio narration
+      const audioUrl = await generateAudio(story, {
+        voice: 'aria',
+        speed: 0.9,
+        pitch: 1.0
+      });
+      
+      console.log('Generated audio URL:', audioUrl);
+      
+      setGeneratedStory(story);
+    } catch (error) {
+      console.error('Error generating story:', error);
+      // Fallback story if generation fails
+      setGeneratedStory("In this captured moment, beauty and emotion intertwine to create something truly special. The image tells a story of life's precious moments, where every detail contributes to a narrative that speaks to the heart. This scene invites us to pause, reflect, and appreciate the stories that surround us every day.");
+    } finally {
       setIsGenerating(false);
-    }, 3000);
+    }
   };
 
   if (isGenerating) {
@@ -44,9 +97,11 @@ const Index = () => {
         <StoryDisplay 
           image={uploadedImage} 
           story={generatedStory}
+          imageAnalysis={imageAnalysis}
           onStartOver={() => {
             setUploadedImage(null);
             setGeneratedStory(null);
+            setImageAnalysis(null);
             setShowUpload(false);
           }}
         />
@@ -65,6 +120,7 @@ const Index = () => {
           onBack={() => {
             setShowUpload(false);
             setUploadedImage(null);
+            setImageAnalysis(null);
           }}
         />
       </div>
