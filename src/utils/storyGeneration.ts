@@ -1,4 +1,3 @@
-
 import { ImageAnalysisResult } from './imageAnalysis';
 
 export interface StoryGenerationOptions {
@@ -67,10 +66,14 @@ const getTemplatesForType = (type: string, tone: string) => {
     romantic: [
       "In {setting} where {colors} entwine,\n{Description} tells of love divine.\n{Objects} witness hearts that {story_element},\nWith {emotions} that forever gleam.",
       "{Colors} bloom in {setting} fair,\n{Emotions} floating through the air.\n{Description} captures love so true,\nWhere {story_element} and dreams come through.",
+    ],
+    contemplative: [
+      "In quiet {setting} bathed in {colors},\n{Description} speaks to thoughtful scholars.\n{Objects} stand in silent grace,\nWhere {story_element} finds its place.",
+      "Through {setting} touched by {colors} deep,\n{Description} makes the spirit weep.\n{Objects} hold {emotions} dear,\nWhere {story_element} draws near.",
     ]
   };
 
-  return options.type === 'poem' ? poemTemplates[tone] || poemTemplates.contemplative : storyTemplates[tone] || storyTemplates.contemplative;
+  return type === 'poem' ? poemTemplates[tone] || poemTemplates.contemplative : storyTemplates[tone] || storyTemplates.contemplative;
 };
 
 const selectBestTemplate = (templates: string[], analysis: ImageAnalysisResult): string => {
